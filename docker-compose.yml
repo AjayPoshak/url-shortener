@@ -1,0 +1,66 @@
+version: "3.8"
+
+services:
+  # Development environment
+  app-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    volumes:
+      - ${PWD}:/app:Z # :Z is important for SELinux contexts in Podman
+      - go-modules:/go/pkg/mod
+    environment:
+      - GO_ENV=development
+      - POSTGRES_HOST=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=myapp_dev
+    ports:
+      - "8095:8095"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - app-network
+    # Using absolute path for build directory
+    command: CompileDaemon --build="go build -o /app/build/url-shortener /app/cmd/server/main.go" --command="/app/build/url-shortener" --color=true -pattern="(.+\\.go|.+\\.env)$$" --directory="/app" --verbose
+    develop:
+      watch:
+        - action: rebuild
+          path: .
+          target: /app
+          ignore:
+            - .git/
+            - .gitignore
+            - build/
+            - vendor/
+            - "*.md"
+
+  # PostgreSQL database
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_MULTIPLE_DATABASES=myapp_dev,myapp_prod
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ${PWD}/init-scripts:/docker-entrypoint-initdb.d:Z
+    ports:
+      - "5432:5432"
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres-data:
+  go-modules:
+
+networks:
+  app-network:
+    driver: bridge
