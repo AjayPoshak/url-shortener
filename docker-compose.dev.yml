@@ -1,0 +1,76 @@
+services:
+  app-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    volumes:
+      # - ${PWD}:/app:Z
+      - go-modules:/go/pkg/mod
+    environment:
+      - GO_ENV=development
+      - MONGODB_URI=mongodb://myapp_user:${MONGODB_PASSWORD:-secure_password}@mongodb-dev:27017/myapp_dev?authSource=myapp_dev
+      - MONGODB_DATABASE=myapp_dev
+    ports:
+      - "8095:8095"
+    depends_on:
+      mongodb-dev:
+        condition: service_healthy
+    networks:
+      - app-network-dev
+    # command: CompileDaemon --build="go build -o /app/build/url-shortener /app/cmd/server/main.go" --command="/app/build/url-shortener" --color=true -pattern="(.+\\.go|.+\\.env)$$" --directory="/app" --verbose
+
+    command: sh -c "while [ ! -f /app/go.mod ]; do sleep 1; done && CompileDaemon --build='go build -o /app/build/url-shortener /app/cmd/server/main.go' --command='/app/build/url-shortener' --color=true -pattern='(.+\\.go|.+\\.env)$$' --directory='/app' --verbose"
+    develop:
+      watch:
+        - action: sync
+          path: .
+          target: /app
+          ignore:
+            - /app/.git/
+            - .gitignore
+            - build/
+            - vendor/
+            - "*.md"
+
+  mongodb-dev:
+    user: mongodb
+    image: mongo:6
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD:-admin_password}
+      - MONGO_INITDB_DATABASE=myapp_dev
+      - MONGODB_USER=myapp_user
+      - MONGODB_PASSWORD=${MONGODB_PASSWORD:-secure_password}
+    volumes:
+      - mongodb-data-dev:/data/db
+      - ${PWD}/init-scripts:/docker-entrypoint-initdb.d:Z
+    ports:
+      - "27017:27017"
+    networks:
+      - app-network-dev
+    command: mongod --auth --quiet --logpath /dev/null
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mongosh",
+          "admin",
+          "-u",
+          "admin",
+          "-p",
+          "${MONGO_ROOT_PASSWORD:-admin_password}",
+          "--eval",
+          "db.adminCommand('ping')",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mongodb-data-dev:
+  go-modules:
+
+networks:
+  app-network-dev:
+    driver: bridge

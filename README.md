@@ -90,6 +90,12 @@ curl http://localhost:8095/health
 - `internal/handlers/` - HTTP request handlers
 - `internal/middleware/` - HTTP middleware (logging, etc.)
 
+### To connect with local mongo
+
+```bash
+mongosh -u admin -p --authenticationDatabase admin
+```
+
 ### Building for Production
 
 To build a production binary:

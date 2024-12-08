@@ -1,66 +1,76 @@
 version: "3.8"
 
 services:
-  # Development environment
-  app-dev:
+  app-prod:
     build:
       context: .
       dockerfile: Dockerfile
-      target: development
-    volumes:
-      - ${PWD}:/app:Z # :Z is important for SELinux contexts in Podman
-      - go-modules:/go/pkg/mod
+      target: production
     environment:
-      - GO_ENV=development
-      - POSTGRES_HOST=postgres
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=myapp_dev
+      - GO_ENV=production
+      - MONGODB_URI=mongodb://${MONGODB_PROD_USER}:${MONGODB_PROD_PASSWORD}@mongodb-prod:27017/myapp_prod?authSource=myapp_prod
+      - MONGODB_DATABASE=myapp_prod
     ports:
-      - "8095:8095"
+      - "8096:8096"
     depends_on:
-      postgres:
+      mongodb-prod:
         condition: service_healthy
     networks:
-      - app-network
-    # Using absolute path for build directory
-    command: CompileDaemon --build="go build -o /app/build/url-shortener /app/cmd/server/main.go" --command="/app/build/url-shortener" --color=true -pattern="(.+\\.go|.+\\.env)$$" --directory="/app" --verbose
-    develop:
-      watch:
-        - action: rebuild
-          path: .
-          target: /app
-          ignore:
-            - .git/
-            - .gitignore
-            - build/
-            - vendor/
-            - "*.md"
+      - app-network-prod
+    deploy:
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "10"
 
-  # PostgreSQL database
-  postgres:
-    image: postgres:15-alpine
+  mongodb-prod:
+    image: mongo:6
+    command: mongod --auth --quiet
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
-      - POSTGRES_MULTIPLE_DATABASES=myapp_dev,myapp_prod
+      - MONGO_INITDB_ROOT_USERNAME=${MONGODB_PROD_ROOT_USER:-admin}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGODB_PROD_ROOT_PASSWORD}
+      - MONGO_INITDB_DATABASE=myapp_prod
+      - MONGODB_USER=${MONGODB_PROD_USER}
+      - MONGODB_PASSWORD=${MONGODB_PROD_PASSWORD}
     volumes:
-      - postgres-data:/var/lib/postgresql/data
-      - ${PWD}/init-scripts:/docker-entrypoint-initdb.d:Z
-    ports:
-      - "5432:5432"
+      - mongodb-data-prod:/data/db
+      - ${PWD}/init-scripts-prod:/docker-entrypoint-initdb.d:Z
     networks:
-      - app-network
+      - app-network-prod
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
+      test:
+        [
+          "CMD",
+          "mongosh",
+          "admin",
+          "-u",
+          "${MONGODB_PROD_ROOT_USER:-admin}",
+          "-p",
+          "${MONGODB_PROD_ROOT_PASSWORD}",
+          "--eval",
+          "db.adminCommand('ping')",
+        ]
+      interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 4G
+    ulimits:
+      nproc: 64000
+      nofile:
+        soft: 64000
+        hard: 64000
 
 volumes:
-  postgres-data:
-  go-modules:
+  mongodb-data-prod:
 
 networks:
-  app-network:
+  app-network-prod:
     driver: bridge

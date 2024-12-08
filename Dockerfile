@@ -8,7 +8,10 @@ RUN apk add --no-cache gcc musl-dev make
 # Development stage
 FROM base AS development
 RUN apk add --no-cache git
-
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN make build
 # Install CompileDaemon
 RUN go install github.com/githubnemo/CompileDaemon@latest
 
@@ -19,18 +22,14 @@ RUN mkdir -p /app/build && \
 
 EXPOSE 8080
 
-# Builder stage for production
-FROM base AS builder
-COPY . .
-RUN make build
 
 # Production stage
 FROM alpine:latest AS production
 RUN apk --no-cache add make
 
 WORKDIR /app
-COPY --from=builder /app/build/url-shortener .
-COPY --from=builder /app/Makefile .
+COPY --from=base /app/build/url-shortener .
+COPY --from=base /app/Makefile .
 
 EXPOSE 8080
 
