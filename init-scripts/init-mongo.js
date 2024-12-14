@@ -1,4 +1,4 @@
-db = db.getSiblingDB("myapp_dev");
+db = db.getSiblingDB(process.env.MONGODB_DATABASE);
 
 db.createUser({
   user: process.env.MONGODB_USER,
@@ -6,7 +6,7 @@ db.createUser({
   roles: [
     {
       role: "readWrite",
-      db: "myapp_dev",
+      db: process.env.MONGODB_DATABASE,
     },
   ],
 });
