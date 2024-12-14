@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   app-prod:
     build:
@@ -11,10 +9,9 @@ services:
       - MONGODB_URI=mongodb://${MONGODB_PROD_USER}:${MONGODB_PROD_PASSWORD}@mongodb-prod:27017/myapp_prod?authSource=myapp_prod
       - MONGODB_DATABASE=myapp_prod
     ports:
-      - "8096:8096"
+      - "8095:8095"
     depends_on:
-      mongodb-prod:
-        condition: service_healthy
+      - mongodb-prod
     networks:
       - app-network-prod
     deploy:
@@ -31,36 +28,26 @@ services:
     image: mongo:6
     command: mongod --auth --quiet
     environment:
-      - MONGO_INITDB_ROOT_USERNAME=${MONGODB_PROD_ROOT_USER:-admin}
-      - MONGO_INITDB_ROOT_PASSWORD=${MONGODB_PROD_ROOT_PASSWORD}
       - MONGO_INITDB_DATABASE=myapp_prod
-      - MONGODB_USER=${MONGODB_PROD_USER}
-      - MONGODB_PASSWORD=${MONGODB_PROD_PASSWORD}
+      - MONGO_INITDB_ROOT_USERNAME=${MONGODB_USER}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGODB_ROOT_PASSWORD}
+      - MONGODB_USER=${MONGODB_USER}
+      - MONGODB_PASSWORD=${MONGODB_PASSWORD}
+
     volumes:
       - mongodb-data-prod:/data/db
-      - ${PWD}/init-scripts-prod:/docker-entrypoint-initdb.d:Z
+      - ${PWD}/init-scripts:/docker-entrypoint-initdb.d:Z
     networks:
       - app-network-prod
     healthcheck:
-      test:
-        [
-          "CMD",
-          "mongosh",
-          "admin",
-          "-u",
-          "${MONGODB_PROD_ROOT_USER:-admin}",
-          "-p",
-          "${MONGODB_PROD_ROOT_PASSWORD}",
-          "--eval",
-          "db.adminCommand('ping')",
-        ]
+      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
       interval: 10s
       timeout: 5s
       retries: 5
     deploy:
       resources:
         limits:
-          cpus: "2"
+          cpus: "0.8"
           memory: 4G
     ulimits:
       nproc: 64000
