@@ -8,7 +8,7 @@ services:
       target: production
     environment:
       - GO_ENV=production
-      - MONGODB_URI=mongodb://${MONGODB_PROD_USER}:${MONGODB_PROD_PASSWORD}@mongodb-prod:27017/myapp_prod?authSource=myapp_prod
+      - MONGODB_URI=mongodb://${MONGODB_USER}:${MONGODB_PASSWORD}@mongodb-prod:27017/myapp_prod?authSource=myapp_prod
       - MONGODB_DATABASE=myapp_prod
     ports:
       - "8096:8096"
