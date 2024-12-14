@@ -1,4 +1,16 @@
 services:
+  reverse-proxy:
+    image: traefik:v3.2
+    command:
+      - "--providers.docker=true" # Enabling Docker as provider
+      - "--entryPoints.websecure.address=:443"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
   app-prod:
     build:
       context: .
@@ -10,6 +22,8 @@ services:
       - MONGODB_DATABASE=${MONGODB_DATABASE}
     ports:
       - "8095:8095"
+    labels:
+      - "traefik.enable=true"
     depends_on:
       - mongodb-prod
     networks:
