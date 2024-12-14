@@ -108,3 +108,23 @@ func (handler *Handlers) CreateUrl(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("OK"))
 }
+
+func (handler *Handlers) Redirect(response http.ResponseWriter, request *http.Request) {
+	shortCode := request.PathValue("shortCode")
+	// Get the correspond long URL
+	urlsCollection := handler.db.Database(handler.DatabaseName).Collection("urls")
+	filter := bson.M{"short_code": shortCode}
+  var result url
+	err := urlsCollection.FindOne(request.Context(), filter).Decode(&result)
+	if err != nil {
+    if err == mongo.ErrNoDocuments {
+      http.Error(response, "This short URL does not exists", http.StatusNotFound)
+      log.Printf("Short URL does not exists %v", shortCode)
+      return
+    }
+		http.Error(response, "Something is not right here", http.StatusInternalServerError)
+		return
+	}
+  // @TODO: Update click count
+  http.Redirect(response, request, result.OriginalUrl, http.StatusFound)
+}

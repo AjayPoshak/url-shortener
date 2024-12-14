@@ -18,10 +18,10 @@ func main() {
 	if mongoURI == "" {
 		log.Fatal("MONGO_URI is not set")
 	}
-  databaseName := os.Getenv("MONGODB_DATABASE")
-  if databaseName == "" {
-    log.Fatal("MONGODB_DATABASE is not set")
-  }
+	databaseName := os.Getenv("MONGODB_DATABASE")
+	if databaseName == "" {
+		log.Fatal("MONGODB_DATABASE is not set")
+	}
 	serverAPI := options.ServerAPI(options.ServerAPIVersion1)
 	opts := options.Client().ApplyURI(mongoURI).SetServerAPIOptions(serverAPI)
 	opts.SetDirect(true)
@@ -53,7 +53,8 @@ func main() {
 	// Register routes with middleware
 	router.HandleFunc("GET /urls", handlers.GetUrls)
 	router.HandleFunc("POST /urls", handlers.CreateUrl)
-	router.HandleFunc("/health", handlers.HealthHandler)
+	router.HandleFunc("GET /health", handlers.HealthHandler)
+	router.HandleFunc("GET /{shortCode}", handlers.Redirect)
 
 	port := ":8095"
 	// Create a new server
