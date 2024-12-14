@@ -20,17 +20,13 @@ RUN mkdir -p /app/build && \
     chown -R 1000:1000 /app && \
     chmod -R 777 /app
 
-EXPOSE 8080
-
 
 # Production stage
 FROM alpine:latest AS production
 RUN apk --no-cache add make
 
 WORKDIR /app
-COPY --from=base /app/build/url-shortener .
-COPY --from=base /app/Makefile .
-
-EXPOSE 8080
+COPY --from=development /app/build/url-shortener .
+COPY --from=development /app/makefile .
 
 ENTRYPOINT ["./url-shortener"]
