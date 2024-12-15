@@ -2,7 +2,6 @@ services:
   reverse-proxy:
     image: traefik:v3.2
     command:
-      - "--log.level=DEBUG"
       - "--api.insecure=true" # Enables web UI
       - "--providers.docker=true" # Enabling Docker as provider
       - "--entryPoints.websecure.address=:443"
