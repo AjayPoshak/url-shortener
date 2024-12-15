@@ -2,14 +2,26 @@ services:
   reverse-proxy:
     image: traefik:v3.2
     command:
+      - "--api.insecure=true" # Enables web UI
       - "--providers.docker=true" # Enabling Docker as provider
       - "--entryPoints.websecure.address=:443"
-      - "--entrypoints.web.address=:80"
+      - "--entryPoints.web.address=:80"
+      - "--providers.docker.exposedbydefault=false" # Do not expose containers by default unless explicitly specified
+      - "--certificatesresolvers.myresolver.acme.httpchallenge=true"
+      - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.myresolver.acme.email=poshakajay@gmail.com"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
     ports:
       - "80:80"
       - "443:443"
+      - "8080:8080" # for web UI
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./letsencrypt:/letsencrypt
+    networks:
+      - app-network-prod
 
   app-prod:
     build:
@@ -23,7 +35,11 @@ services:
     ports:
       - "8095:8095"
     labels:
-      - "traefik.enable=true"
+      - "traefik.enable=true" # Explicitly telling Traefik to expose this container
+      - "traefik.http.routers.app-prod.entrypoints=websecure" # Allow requests from predefined entrypoint named "websecure"
+      - "traefik.http.routers.app-prod.rule=Host(`urlly.app`)"
+      - "traefik.http.routers.app-prod.tls.certresolver=myresolver"
+
     depends_on:
       - mongodb-prod
     networks:
