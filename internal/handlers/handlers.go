@@ -4,12 +4,11 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/json"
-	"fmt"
+	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"io"
-	"log"
 	"net/http"
 	"time"
 )
@@ -46,17 +45,18 @@ func (handler *Handlers) GetUrls(w http.ResponseWriter, r *http.Request) {
 	filter := bson.M{"user_id": userId}
 	cursor, err := urlsCollection.Find(r.Context(), filter)
 	if err != nil {
-		log.Printf("Could not retrieve urls for user %d: %v ", userId, err)
+		log.Error().Msgf("Could not retrieve urls for user %d: %v ", userId, err)
 		http.Error(w, "Could not retrieve urls", http.StatusInternalServerError)
 		return
 	}
 	// Unpack cursor into slice
 	var results []url
 	if err = cursor.All(context.TODO(), &results); err != nil {
-		panic(err)
+		log.Error().Msgf("Could not unpack cursor into slice: %v ", err)
+		http.Error(w, "Something is not right here. We are looking into it", http.StatusInternalServerError)
+		return
 	}
 	defer cursor.Close(context.Background())
-	fmt.Println("results ", results)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(results)
 }
@@ -66,7 +66,7 @@ func (handler *Handlers) CreateUrl(w http.ResponseWriter, r *http.Request) {
 	var urlReq URLRequest
 	// Validate the request body
 	if err := json.NewDecoder(r.Body).Decode(&urlReq); err != nil {
-		log.Printf("Invalid request body: %v", err)
+		log.Error().Msgf("Invalid request body: %v", err)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -77,11 +77,13 @@ func (handler *Handlers) CreateUrl(w http.ResponseWriter, r *http.Request) {
 	// Read request body from POST
 	requestBody, err := io.ReadAll(r.Body)
 	if err != nil {
+		log.Error().Msgf("Error reading request body: %v", err)
 		w.Write([]byte("Error reading request body"))
 		return
 	}
 	json.Unmarshal(requestBody, &urlReq)
 	if urlReq.URL == "" || len(urlReq.URL) > maxLength {
+		log.Error().Msgf("Invalid URL: %v", urlReq.URL)
 		http.Error(w, "Invalid URL", http.StatusBadRequest)
 		return
 	}
@@ -95,10 +97,10 @@ func (handler *Handlers) CreateUrl(w http.ResponseWriter, r *http.Request) {
 		index := int(generatedHash[i]) % 62
 		shortURL += string(dictionary[index])
 	}
-	fmt.Println("Hash: ", string(requestBody), shortURL)
+	log.Info().Str("requestBody ", string(requestBody)).Str("shortURL", shortURL).Msg("Generated Hash ")
 	_, err = urlsCollection.InsertOne(r.Context(), bson.M{"original_url": urlReq.URL, "short_code": shortURL, "created_at": time.Now(), "user_id": userId})
 	if err != nil {
-		log.Printf("Could not insert new short_code to database %v", err)
+		log.Error().Msgf("Could not insert new short_code to database %v", err)
 		http.Error(w, "Could not insert new short_code to database", http.StatusInternalServerError)
 		return
 	}
@@ -114,17 +116,18 @@ func (handler *Handlers) Redirect(response http.ResponseWriter, request *http.Re
 	// Get the correspond long URL
 	urlsCollection := handler.db.Database(handler.DatabaseName).Collection("urls")
 	filter := bson.M{"short_code": shortCode}
-  var result url
+	var result url
 	err := urlsCollection.FindOne(request.Context(), filter).Decode(&result)
 	if err != nil {
-    if err == mongo.ErrNoDocuments {
-      http.Error(response, "This short URL does not exists", http.StatusNotFound)
-      log.Printf("Short URL does not exists %v", shortCode)
-      return
-    }
+		if err == mongo.ErrNoDocuments {
+			log.Error().Msgf("Short URL does not exists %v", shortCode)
+			http.Error(response, "This short URL does not exists", http.StatusNotFound)
+			return
+		}
+		log.Error().Msgf("Error fetching short URL %v", err)
 		http.Error(response, "Something is not right here", http.StatusInternalServerError)
 		return
 	}
-  // @TODO: Update click count
-  http.Redirect(response, request, result.OriginalUrl, http.StatusFound)
+	// @TODO: Update click count
+	http.Redirect(response, request, result.OriginalUrl, http.StatusFound)
 }
