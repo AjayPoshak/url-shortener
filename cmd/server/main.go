@@ -14,7 +14,7 @@ import (
 )
 
 func main() {
-	zerolog.SetGlobalLevel(zerolog.InfoLevel) // Setting log level
+	zerolog.SetGlobalLevel(zerolog.WarnLevel) // Setting log level
 	mongoURI := os.Getenv("MONGODB_URI")
 	if mongoURI == "" {
 		log.Fatal().Msg("MONGO_URI is not set")
