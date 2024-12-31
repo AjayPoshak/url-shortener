@@ -8,13 +8,13 @@ services:
       - go-modules:/go/pkg/mod
     environment:
       - GO_ENV=development
-      - MONGODB_URI=mongodb://${MONGODB_USER}:${MONGODB_PASSWORD}@mongodb-dev:27017/myapp_dev?authSource=myapp_dev
-      - MONGODB_DATABASE=myapp_dev
+      - MONGODB_URI=mongodb://${MONGODB_USER}:${MONGODB_PASSWORD}@mongodb-dev:27017/${MONGODB_DATABASE}?authSource=${MONGODB_DATABASE}
+      - MONGODB_DATABASE=${MONGODB_DATABASE}
     ports:
       - "8095:8095"
     depends_on:
-      mongodb-dev:
-        condition: service_healthy
+      - mongodb-dev
+        # condition: service_healthy
     networks:
       - app-network-dev
 
@@ -35,11 +35,13 @@ services:
     user: mongodb
     image: mongo:6
     environment:
-      - MONGO_INITDB_DATABASE=myapp_dev
-      - MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USER}
-      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}
+      - MONGO_INITDB_DATABASE=${MONGODB_DATABASE}
+      - MONGO_INITDB_ROOT_USERNAME=${MONGODB_USER}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGODB_ROOT_PASSWORD}
+      - MONGODB_DATABASE=${MONGODB_DATABASE}
       - MONGODB_USER=${MONGODB_USER}
       - MONGODB_PASSWORD=${MONGODB_PASSWORD}
+
     volumes:
       - mongodb-data-dev:/data/db
       - ${PWD}/init-scripts:/docker-entrypoint-initdb.d:Z
