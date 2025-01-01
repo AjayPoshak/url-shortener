@@ -49,10 +49,10 @@ services:
         condition: on-failure
         max_attempts: 3
     logging:
-      driver: "json-file"
+      driver: loki
       options:
-        max-size: "50m"
-        max-file: "10"
+        loki-url: "http://172.31.16.214:3100/loki/api/v1/push"
+        loki-external-labels: service=url-shortener
 
   mongodb-prod:
     image: mongo:6
@@ -85,6 +85,24 @@ services:
       nofile:
         soft: 64000
         hard: 64000
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    restart: unless-stopped
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.sysfs=/host/sys"
+      - "--path.rootfs=/rootfs"
+    ports:
+      - "9100:9100"
+    labels:
+      app: "url-shortener"
+      environment: "production"
 
 volumes:
   mongodb-data-prod:

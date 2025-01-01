@@ -2,25 +2,26 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"github.com/AjayPoshak/url-shortener/internal/handlers"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"log"
 	"net/http"
 	"os"
 	"time"
 )
 
 func main() {
+	zerolog.SetGlobalLevel(zerolog.WarnLevel) // Setting log level
 	mongoURI := os.Getenv("MONGODB_URI")
 	if mongoURI == "" {
-		log.Fatal("MONGO_URI is not set")
+		log.Fatal().Msg("MONGO_URI is not set")
 	}
 	databaseName := os.Getenv("MONGODB_DATABASE")
 	if databaseName == "" {
-		log.Fatal("MONGODB_DATABASE is not set")
+		log.Fatal().Msg("MONGODB_DATABASE is not set")
 	}
 	serverAPI := options.ServerAPI(options.ServerAPIVersion1)
 	opts := options.Client().ApplyURI(mongoURI).SetServerAPIOptions(serverAPI)
@@ -29,10 +30,12 @@ func main() {
 	// Create a new client and connect to mongo
 	client, err := mongo.Connect(context.TODO(), opts)
 	if err != nil {
+		log.Fatal().Msgf("Failed to connect to MongoDB: %v", err)
 		panic(err)
 	}
 	defer func() {
 		if err := client.Disconnect(context.TODO()); err != nil {
+			log.Fatal().Msgf("Failed to disconnect from MongoDB: %v", err)
 			panic(err)
 		}
 	}()
@@ -41,9 +44,10 @@ func main() {
 	var result bson.M
 
 	if err := client.Database("admin").RunCommand(context.TODO(), bson.D{{"ping", 1}}).Decode(&result); err != nil {
+		log.Fatal().Msgf("Failed to ping MongoDB: %v", err)
 		panic(err)
 	}
-	fmt.Println("Succesfully connected to MongoDB")
+	log.Info().Msg("Succesfully connected to MongoDB")
 	// Create a new router
 	router := http.NewServeMux()
 
@@ -66,9 +70,9 @@ func main() {
 	}
 
 	// Start the server
-	log.Println("Starting server on ", port)
+	log.Info().Msgf("Starting server on ", port)
 	if err := server.ListenAndServe(); err != nil {
-		log.Fatalf("Server failed to start: %v", err)
+		log.Fatal().Msgf("Server failed to start: %v", err)
 	}
 }
 
