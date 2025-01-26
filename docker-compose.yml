@@ -111,6 +111,17 @@ services:
       app: "url-shortener"
       environment: "production"
 
+  watchtower: # Automatically update containers
+    image: containrrr/watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --debug --include-restarting
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_SCHEDULE=0 */30 * * * * # Run every half an hour
+      - GITHUB_USER=${GITHUB_USER}
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+
 volumes:
   mongodb-data-prod:
 
