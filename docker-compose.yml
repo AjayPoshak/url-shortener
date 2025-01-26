@@ -30,6 +30,7 @@ services:
       - app-network-prod
 
   app-prod:
+    image: ghcr.io/ajayposhak/url-shortener:latest
     build:
       context: .
       dockerfile: Dockerfile
