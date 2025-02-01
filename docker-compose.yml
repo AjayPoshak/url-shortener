@@ -39,6 +39,7 @@ services:
       - GO_ENV=production
       - MONGODB_URI=mongodb://${MONGODB_USER}:${MONGODB_PASSWORD}@mongodb-prod:27017/${MONGODB_DATABASE}?authSource=${MONGODB_DATABASE}
       - MONGODB_DATABASE=${MONGODB_DATABASE}
+      - REDIS_URI=${REDIS_HOST}:${REDIS_PORT}
     ports:
       - "8095:8095"
     labels:
@@ -121,6 +122,13 @@ services:
       - WATCHTOWER_SCHEDULE=0 */30 * * * * # Run every half an hour
       - GITHUB_USER=${GITHUB_USER}
       - GITHUB_TOKEN=${GITHUB_TOKEN}
+
+  redis-prod:
+    image: redis:7.4
+    ports:
+      - "6379:6379"
+    networks:
+      - app-network-prod
 
 volumes:
   mongodb-data-prod:
