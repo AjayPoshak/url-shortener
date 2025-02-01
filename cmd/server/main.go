@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"github.com/AjayPoshak/url-shortener/internal/handlers"
+	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
@@ -23,6 +24,16 @@ func main() {
 	if databaseName == "" {
 		log.Fatal().Msg("MONGODB_DATABASE is not set")
 	}
+	redisURI := os.Getenv("REDIS_URI")
+	if redisURI == "" {
+		log.Fatal().Msg("REDIS_URI is not set")
+	}
+	redis := redis.NewClient(&redis.Options{
+		Addr:     redisURI,
+		Password: "",
+		DB:       0,
+	})
+
 	serverAPI := options.ServerAPI(options.ServerAPIVersion1)
 	opts := options.Client().ApplyURI(mongoURI).SetServerAPIOptions(serverAPI)
 	opts.SetDirect(true)
@@ -52,7 +63,7 @@ func main() {
 	router := http.NewServeMux()
 
 	// Initialize the handlers
-	handlers := handlers.NewHandlers(client, databaseName)
+	handlers := handlers.NewHandlers(client, databaseName, redis)
 
 	// Register routes with middleware
 	router.HandleFunc("GET /urls", handlers.GetUrls)

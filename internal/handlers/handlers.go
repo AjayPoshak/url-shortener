@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/json"
+	"fmt"
+	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -16,12 +18,14 @@ import (
 type Handlers struct {
 	db           *mongo.Client
 	DatabaseName string
+	redis        *redis.Client
 }
 
-func NewHandlers(client *mongo.Client, dbName string) *Handlers {
+func NewHandlers(client *mongo.Client, dbName string, redis *redis.Client) *Handlers {
 	return &Handlers{
 		db:           client,
 		DatabaseName: dbName,
+		redis:        redis,
 	}
 }
 
@@ -37,6 +41,22 @@ type url struct {
 	UserId      int                `bson:"user_id,omitempty" json:"user_id,omitempty"`
 }
 
+type ErrorResponse struct {
+	Message string `json:"message"`
+	Code    int    `json:"code"`
+}
+
+func JSONError(w http.ResponseWriter, err string, code int) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(code)
+	errResponse := ErrorResponse{
+		Message: err,
+		Code:    code,
+	}
+	json.NewEncoder(w).Encode(&errResponse)
+}
+
 func (handler *Handlers) GetUrls(w http.ResponseWriter, r *http.Request) {
 	// @TODO: Replace it with actual user ids
 	userId := 1
@@ -46,19 +66,23 @@ func (handler *Handlers) GetUrls(w http.ResponseWriter, r *http.Request) {
 	cursor, err := urlsCollection.Find(r.Context(), filter)
 	if err != nil {
 		log.Error().Msgf("Could not retrieve urls for user %d: %v ", userId, err)
-		http.Error(w, "Could not retrieve urls", http.StatusInternalServerError)
+		JSONError(w, "Could not retrieve urls", http.StatusInternalServerError)
 		return
 	}
 	// Unpack cursor into slice
 	var results []url
 	if err = cursor.All(context.TODO(), &results); err != nil {
 		log.Error().Msgf("Could not unpack cursor into slice: %v ", err)
-		http.Error(w, "Something is not right here. We are looking into it", http.StatusInternalServerError)
+		JSONError(w, "Something is not right here. We are looking into it", http.StatusInternalServerError)
 		return
 	}
 	defer cursor.Close(context.Background())
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(results)
+}
+
+type CreateUrlResponse struct {
+	ShortCode string
 }
 
 func (handler *Handlers) CreateUrl(w http.ResponseWriter, r *http.Request) {
@@ -67,7 +91,7 @@ func (handler *Handlers) CreateUrl(w http.ResponseWriter, r *http.Request) {
 	// Validate the request body
 	if err := json.NewDecoder(r.Body).Decode(&urlReq); err != nil {
 		log.Error().Msgf("Invalid request body: %v", err)
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		JSONError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 	hash := md5.New()
@@ -84,7 +108,7 @@ func (handler *Handlers) CreateUrl(w http.ResponseWriter, r *http.Request) {
 	json.Unmarshal(requestBody, &urlReq)
 	if urlReq.URL == "" || len(urlReq.URL) > maxLength {
 		log.Error().Msgf("Invalid URL: %v", urlReq.URL)
-		http.Error(w, "Invalid URL", http.StatusBadRequest)
+		JSONError(w, "Invalid URL", http.StatusBadRequest)
 		return
 	}
 
@@ -101,10 +125,19 @@ func (handler *Handlers) CreateUrl(w http.ResponseWriter, r *http.Request) {
 	_, err = urlsCollection.InsertOne(r.Context(), bson.M{"original_url": urlReq.URL, "short_code": shortURL, "created_at": time.Now(), "user_id": userId})
 	if err != nil {
 		log.Error().Msgf("Could not insert new short_code to database %v", err)
-		http.Error(w, "Could not insert new short_code to database", http.StatusInternalServerError)
+		JSONError(w, "Already have this URL in database", http.StatusConflict)
 		return
 	}
-	w.Write([]byte("Hash: " + string(hash.Sum(nil))))
+	w.Header().Set("Content-Type", "application/json")
+	response := CreateUrlResponse{
+		ShortCode: shortURL,
+	}
+	encodingErr := json.NewEncoder(w).Encode(&response)
+	if encodingErr != nil {
+		log.Error().Msgf("Error encoding short URL %v", encodingErr)
+		JSONError(w, "Error encoding short URL", http.StatusInternalServerError)
+		return
+	}
 }
 
 func (h *Handlers) HealthHandler(w http.ResponseWriter, r *http.Request) {
@@ -113,6 +146,16 @@ func (h *Handlers) HealthHandler(w http.ResponseWriter, r *http.Request) {
 
 func (handler *Handlers) Redirect(response http.ResponseWriter, request *http.Request) {
 	shortCode := request.PathValue("shortCode")
+	cachedValue, redisErr := handler.redis.Get(context.Background(), shortCode).Result()
+	if redisErr != nil {
+		fmt.Println(redisErr)
+		log.Error().Msgf("Error in Redis fetching short URL %v", redisErr)
+	}
+	if cachedValue != "" {
+		log.Info().Msgf("Value found in redis %v", cachedValue)
+		http.Redirect(response, request, cachedValue, http.StatusFound)
+		return
+	}
 	// Get the correspond long URL
 	urlsCollection := handler.db.Database(handler.DatabaseName).Collection("urls")
 	filter := bson.M{"short_code": shortCode}
@@ -121,13 +164,17 @@ func (handler *Handlers) Redirect(response http.ResponseWriter, request *http.Re
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			log.Error().Msgf("Short URL does not exists %v", shortCode)
-			http.Error(response, "This short URL does not exists", http.StatusNotFound)
+			JSONError(response, "This short URL does not exists", http.StatusNotFound)
 			return
 		}
 		log.Error().Msgf("Error fetching short URL %v", err)
-		http.Error(response, "Something is not right here", http.StatusInternalServerError)
+		JSONError(response, "Something is not right here", http.StatusInternalServerError)
 		return
 	}
 	// @TODO: Update click count
+	err = handler.redis.Set(context.Background(), shortCode, result.OriginalUrl, 0).Err()
+	if err != nil {
+		log.Error().Msgf("Error in Redis setting short URL %v", err)
+	}
 	http.Redirect(response, request, result.OriginalUrl, http.StatusFound)
 }
