@@ -10,6 +10,7 @@ services:
       - GO_ENV=development
       - MONGODB_URI=mongodb://${MONGODB_USER}:${MONGODB_PASSWORD}@mongodb-dev:27017/${MONGODB_DATABASE}?authSource=${MONGODB_DATABASE}
       - MONGODB_DATABASE=${MONGODB_DATABASE}
+      - REDIS_URI=${REDIS_HOST}:${REDIS_PORT}
     ports:
       - "8095:8095"
     depends_on:
@@ -55,6 +56,13 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+
+  redis-dev:
+    image: redis:7.4
+    ports:
+      - "6379:6379"
+    networks:
+      - app-network-dev
 
 volumes:
   mongodb-data-dev:
