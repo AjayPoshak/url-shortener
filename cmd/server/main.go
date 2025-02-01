@@ -15,7 +15,17 @@ import (
 )
 
 func main() {
-	zerolog.SetGlobalLevel(zerolog.WarnLevel) // Setting log level
+	env := os.Getenv("GO_ENV")
+	if env == "" {
+		log.Fatal().Msg("GO_ENV is not set")
+	}
+	if env == "production" {
+
+		zerolog.SetGlobalLevel(zerolog.WarnLevel)
+	} else {
+
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	}
 	mongoURI := os.Getenv("MONGODB_URI")
 	if mongoURI == "" {
 		log.Fatal().Msg("MONGO_URI is not set")
