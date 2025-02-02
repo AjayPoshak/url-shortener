@@ -47,7 +47,6 @@ services:
       - "traefik.http.routers.app-prod.entrypoints=websecure" # Allow requests from predefined entrypoint named "websecure"
       - "traefik.http.routers.app-prod.rule=Host(`urlly.app`)"
       - "traefik.http.routers.app-prod.tls.certresolver=myresolver"
-
     depends_on:
       - mongodb-prod
     networks:
@@ -61,6 +60,36 @@ services:
       options:
         loki-url: "http://172.31.16.214:3100/loki/api/v1/push"
         loki-external-labels: service=url-shortener
+    command: ["./url-shortener"]
+
+  app-workers:
+    image: ghcr.io/ajayposhak/url-shortener-workers:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    environment:
+      - GO_ENV=production
+      - MONGODB_URI=mongodb://${MONGODB_USER}:${MONGODB_PASSWORD}@mongodb-prod:27017/${MONGODB_DATABASE}?authSource=${MONGODB_DATABASE}
+      - MONGODB_DATABASE=${MONGODB_DATABASE}
+      - REDIS_URI=${REDIS_HOST}:${REDIS_PORT}
+    ports:
+      - "8096:8096"
+    depends_on:
+      - redis-prod
+      - mongodb-prod
+    networks:
+      - app-network-prod
+    deploy:
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://172.31.16.214:3100/loki/api/v1/push"
+        loki-external-labels: service=url-shortener-workers
+    command: ["./url-shortener-workers"]
 
   mongodb-prod:
     image: mongo:6

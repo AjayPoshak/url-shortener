@@ -14,6 +14,7 @@ db.createUser({
 // Create collections
 db.createCollection("urls");
 db.createCollection("users");
+db.createCollection("analytics")
 
 // Create indexes
 db.urls.createIndex({ short_code: 1 }, { unique: true });

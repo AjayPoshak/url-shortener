@@ -15,11 +15,42 @@ services:
       - "8095:8095"
     depends_on:
       - mongodb-dev
-        # condition: service_healthy
     networks:
       - app-network-dev
 
     command: sh -c "while [ ! -f /app/go.mod ]; do sleep 1; done && CompileDaemon --build='go build -o /app/build/url-shortener /app/cmd/server/main.go' --command='/app/build/url-shortener' --color=true -pattern='(.+\\.go|.+\\.env)$$' --directory='/app' --verbose"
+    develop:
+      watch:
+        - action: sync
+          path: .
+          target: /app
+          ignore:
+            - /app/.git/
+            - .gitignore
+            - build/
+            - vendor/
+            - "*.md"
+
+  app-workers:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    volumes:
+      - go-modules:/go/pkg/mod
+    environment:
+      - GO_ENV=development
+      - MONGODB_URI=mongodb://${MONGODB_USER}:${MONGODB_PASSWORD}@mongodb-dev:27017/${MONGODB_DATABASE}?authSource=${MONGODB_DATABASE}
+      - MONGODB_DATABASE=${MONGODB_DATABASE}
+      - REDIS_URI=${REDIS_HOST}:${REDIS_PORT}
+    ports:
+      - "8096:8096"
+    depends_on:
+      - redis-dev
+    networks:
+      - app-network-dev
+
+    command: sh -c "while [ ! -f /app/go.mod ]; do sleep 1; done && CompileDaemon --build='go build -o /app/build/url-shortener-workers /app/cmd/workers/workers.go' --command='/app/build/url-shortener-workers' --color=true -pattern='(.+\\.go|.+\\.env)$$' --directory='/app' --verbose"
     develop:
       watch:
         - action: sync

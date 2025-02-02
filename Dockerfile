@@ -12,6 +12,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 RUN make build
+RUN make build-workers
 # Install CompileDaemon
 RUN go install github.com/githubnemo/CompileDaemon@latest
 
@@ -27,6 +28,8 @@ RUN apk --no-cache add make
 
 WORKDIR /app
 COPY --from=development /app/build/url-shortener .
+COPY --from=development /app/build/url-shortener-workers .
 COPY --from=development /app/makefile .
 
+# This entrypoint will be overriden by docker-compose to support running both workers and app 
 ENTRYPOINT ["./url-shortener"]

@@ -2,6 +2,7 @@
 
 # Variables
 BINARY_NAME=url-shortener
+WORKERS_BINARY_NAME=url-shortener-workers
 BUILD_DIR=build
 GOPATH=$(shell go env GOPATH)
 COMPILEDAEMON=$(GOPATH)/bin/CompileDaemon
@@ -11,9 +12,18 @@ build:
 	@echo "Building..."
 	@go build -o $(BUILD_DIR)/$(BINARY_NAME) cmd/server/main.go
 
+# Build the workers
+build-workers:
+	@echo "Building..."
+	@go build -o $(BUILD_DIR)/$(WORKERS_BINARY_NAME) cmd/workers/workers.go
+
 # Run the application
 run:
 	@go run cmd/server/main.go
+
+# Run the workers
+run:
+	@go run cmd/workers/workers.go
 
 # Clean build files
 clean:

@@ -2,20 +2,32 @@ package main
 
 import (
 	"context"
+	"net/http"
+	"os"
+	"time"
+
 	"github.com/AjayPoshak/url-shortener/internal/handlers"
+	"github.com/hibiken/asynq"
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"net/http"
-	"os"
-	"time"
 )
 
 func main() {
-	zerolog.SetGlobalLevel(zerolog.WarnLevel) // Setting log level
+	env := os.Getenv("GO_ENV")
+	if env == "" {
+		log.Fatal().Msg("GO_ENV is not set")
+	}
+	if env == "production" {
+
+		zerolog.SetGlobalLevel(zerolog.WarnLevel)
+	} else {
+
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	}
 	mongoURI := os.Getenv("MONGODB_URI")
 	if mongoURI == "" {
 		log.Fatal().Msg("MONGO_URI is not set")
@@ -33,6 +45,9 @@ func main() {
 		Password: "",
 		DB:       0,
 	})
+
+	queueClient := asynq.NewClient(asynq.RedisClientOpt{Addr: redisURI})
+	defer queueClient.Close()
 
 	serverAPI := options.ServerAPI(options.ServerAPIVersion1)
 	opts := options.Client().ApplyURI(mongoURI).SetServerAPIOptions(serverAPI)
@@ -63,7 +78,7 @@ func main() {
 	router := http.NewServeMux()
 
 	// Initialize the handlers
-	handlers := handlers.NewHandlers(client, databaseName, redis)
+	handlers := handlers.NewHandlers(client, databaseName, redis, queueClient)
 
 	// Register routes with middleware
 	router.HandleFunc("GET /urls", handlers.GetUrls)
