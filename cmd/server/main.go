@@ -2,16 +2,18 @@ package main
 
 import (
 	"context"
+	"net/http"
+	"os"
+	"time"
+
 	"github.com/AjayPoshak/url-shortener/internal/handlers"
+	"github.com/hibiken/asynq"
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"net/http"
-	"os"
-	"time"
 )
 
 func main() {
@@ -44,6 +46,9 @@ func main() {
 		DB:       0,
 	})
 
+	queueClient := asynq.NewClient(asynq.RedisClientOpt{Addr: redisURI})
+	defer queueClient.Close()
+
 	serverAPI := options.ServerAPI(options.ServerAPIVersion1)
 	opts := options.Client().ApplyURI(mongoURI).SetServerAPIOptions(serverAPI)
 	opts.SetDirect(true)
@@ -73,7 +78,7 @@ func main() {
 	router := http.NewServeMux()
 
 	// Initialize the handlers
-	handlers := handlers.NewHandlers(client, databaseName, redis)
+	handlers := handlers.NewHandlers(client, databaseName, redis, queueClient)
 
 	// Register routes with middleware
 	router.HandleFunc("GET /urls", handlers.GetUrls)

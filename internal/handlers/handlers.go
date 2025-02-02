@@ -5,27 +5,32 @@ import (
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"time"
+
+	"github.com/AjayPoshak/url-shortener/internal/tasks"
+	"github.com/hibiken/asynq"
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
-	"io"
-	"net/http"
-	"time"
 )
 
 type Handlers struct {
 	db           *mongo.Client
 	DatabaseName string
 	redis        *redis.Client
+	queue        *asynq.Client
 }
 
-func NewHandlers(client *mongo.Client, dbName string, redis *redis.Client) *Handlers {
+func NewHandlers(client *mongo.Client, dbName string, redis *redis.Client, queueClient *asynq.Client) *Handlers {
 	return &Handlers{
 		db:           client,
 		DatabaseName: dbName,
 		redis:        redis,
+		queue:        queueClient,
 	}
 }
 
@@ -144,14 +149,38 @@ func (h *Handlers) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("OK"))
 }
 
+func (handler *Handlers) InsertRedirection(redirectionData tasks.AnalyticsPayload, request *http.Request) {
+	analyticsCollection := handler.db.Database(handler.DatabaseName).Collection("analytics")
+	_, err := analyticsCollection.InsertOne(request.Context(), bson.M{"short_code": redirectionData.ShortCode, "timestamp": redirectionData.Timestamp, "user_agent": redirectionData.UserAgent, "referer": redirectionData.Referer})
+	if err != nil {
+		log.Error().Msgf("Error inserting redirection analytics data %v", err)
+	}
+}
+
+var MAX_QUEUE_RETRY = 10
+var QUEUE_TIMEOUT = 5 * time.Minute
+
 func (handler *Handlers) Redirect(response http.ResponseWriter, request *http.Request) {
+	fmt.Println(request.Header.Get("User-Agent"))
 	shortCode := request.PathValue("shortCode")
+	redirectionAnalytics := tasks.AnalyticsPayload{
+		ShortCode: shortCode,
+		UserAgent: request.Header.Get("User-Agent"),
+		Referer:   "",
+		Timestamp: time.Now(),
+	}
+	fmt.Println("here ", redirectionAnalytics)
+	fmt.Printf("abcd %+v", &redirectionAnalytics)
 	cachedValue, redisErr := handler.redis.Get(context.Background(), shortCode).Result()
 	if redisErr != nil {
-		fmt.Println(redisErr)
 		log.Error().Msgf("Error in Redis fetching short URL %v", redisErr)
 	}
 	if cachedValue != "" {
+		task, err := tasks.NewAnalyticsTask(redirectionAnalytics)
+		if err != nil {
+			log.Error().Msgf("Could not enqueue task: %v", err)
+		}
+		handler.queue.Enqueue(task, asynq.MaxRetry(MAX_QUEUE_RETRY), asynq.Timeout(QUEUE_TIMEOUT))
 		log.Info().Msgf("Value found in redis %v", cachedValue)
 		http.Redirect(response, request, cachedValue, http.StatusFound)
 		return
@@ -171,7 +200,12 @@ func (handler *Handlers) Redirect(response http.ResponseWriter, request *http.Re
 		JSONError(response, "Something is not right here", http.StatusInternalServerError)
 		return
 	}
-	// @TODO: Update click count
+	task, err := tasks.NewAnalyticsTask(redirectionAnalytics)
+	if err != nil {
+		log.Error().Msgf("Could not enqueue task: %v", err)
+	}
+	handler.queue.Enqueue(task, asynq.MaxRetry(MAX_QUEUE_RETRY), asynq.Timeout(QUEUE_TIMEOUT))
+
 	err = handler.redis.Set(context.Background(), shortCode, result.OriginalUrl, 0).Err()
 	if err != nil {
 		log.Error().Msgf("Error in Redis setting short URL %v", err)
