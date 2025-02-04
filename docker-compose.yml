@@ -93,7 +93,7 @@ services:
 
   mongodb-prod:
     image: mongo:6
-    command: mongod --auth --quiet
+    command: mongod --auth
     environment:
       - MONGO_INITDB_DATABASE=${MONGODB_DATABASE}
       - MONGODB_DATABASE=${MONGODB_DATABASE}
@@ -108,7 +108,7 @@ services:
     networks:
       - app-network-prod
     healthcheck:
-      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -122,6 +122,11 @@ services:
       nofile:
         soft: 64000
         hard: 64000
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://172.31.16.214:3100/loki/api/v1/push"
+        loki-external-labels: service=mongodb
 
   node-exporter:
     image: prom/node-exporter:latest
