@@ -60,7 +60,7 @@ services:
       options:
         loki-url: "http://172.31.16.214:3100/loki/api/v1/push"
         loki-external-labels: service=url-shortener
-    entrypoint: ["./url-shortener"]
+    entrypoint: ./url-shortener
 
   app-workers:
     image: ghcr.io/ajayposhak/url-shortener-workers:latest
@@ -89,8 +89,7 @@ services:
       options:
         loki-url: "http://172.31.16.214:3100/loki/api/v1/push"
         loki-external-labels: service=url-shortener-workers
-
-    entrypoint: ["./url-shortener-workers"]
+    entrypoint: ./url-shortener-workers
 
   mongodb-prod:
     image: mongo:6
