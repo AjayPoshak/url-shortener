@@ -26,8 +26,11 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./letsencrypt:/letsencrypt
+      - ./.htpasswd:/etc/traefik/.htpasswd
     networks:
       - app-network-prod
+    labels:
+      - "traefik.http.middlewares.app-prod.basicauth.usersfile=/etc/traefik/.htpasswd"
 
   app-prod:
     image: ghcr.io/ajayposhak/url-shortener:latest
@@ -47,6 +50,11 @@ services:
       - "traefik.http.routers.app-prod.entrypoints=websecure" # Allow requests from predefined entrypoint named "websecure"
       - "traefik.http.routers.app-prod.rule=Host(`urlly.app`)"
       - "traefik.http.routers.app-prod.tls.certresolver=myresolver"
+      - "traefik.http.routers.app-prod-admin.rule=Host(`urlly.app`) && PathPrefix(`/urls`)"
+      - "traefik.http.routers.app-prod-admin.middlewares=app-prod@docker"
+      - "traefik.http.routers.app-prod-admin.entrypoints=websecure"
+      - "traefik.http.routers.app-prod-admin.tls.certresolver=myresolver"
+
     depends_on:
       - mongodb-prod
     networks:
