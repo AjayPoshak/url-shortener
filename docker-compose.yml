@@ -155,11 +155,7 @@ services:
     image: containrrr/watchtower
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-<<<<<<< HEAD
     command: --include-restarting
-=======
-    command:  --include-restarting
->>>>>>> 53855af762f45a443fa59d3de0749ff83461029c
     environment:
       - WATCHTOWER_CLEANUP=true
       - WATCHTOWER_SCHEDULE=0 */30 * * * * # Run every half an hour
