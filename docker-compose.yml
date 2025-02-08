@@ -29,8 +29,6 @@ services:
       - ./.htpasswd:/etc/traefik/.htpasswd
     networks:
       - app-network-prod
-    labels:
-      - "traefik.http.middlewares.app-prod.basicauth.usersfile=/etc/traefik/.htpasswd"
 
   app-prod:
     image: ghcr.io/ajayposhak/url-shortener:latest
@@ -48,13 +46,13 @@ services:
     labels:
       - "traefik.enable=true" # Explicitly telling Traefik to expose this container
       - "traefik.http.routers.app-prod.entrypoints=websecure" # Allow requests from predefined entrypoint named "websecure"
-      - "traefik.http.routers.app-prod.rule=Host(`urlly.app`)"
+      - "traefik.http.routers.app-prod.rule=Host(`urlly.app`) && !PathPrefix(`/urls`)"
       - "traefik.http.routers.app-prod.tls.certresolver=myresolver"
       - "traefik.http.routers.app-prod-admin.rule=Host(`urlly.app`) && PathPrefix(`/urls`)"
-      - "traefik.http.routers.app-prod-admin.middlewares=app-prod@docker"
+      - "traefik.http.routers.app-prod-admin.middlewares=app-auth"
       - "traefik.http.routers.app-prod-admin.entrypoints=websecure"
       - "traefik.http.routers.app-prod-admin.tls.certresolver=myresolver"
-
+      - "traefik.http.middlewares.app-auth.basicauth.usersfile=/etc/traefik/.htpasswd"
     depends_on:
       - mongodb-prod
     networks:
@@ -109,7 +107,6 @@ services:
       - MONGO_INITDB_ROOT_PASSWORD=${MONGODB_ROOT_PASSWORD}
       - MONGODB_USER=${MONGODB_USER}
       - MONGODB_PASSWORD=${MONGODB_PASSWORD}
-
     volumes:
       - mongodb-data-prod:/data/db
       - ${PWD}/init-scripts:/docker-entrypoint-initdb.d:Z
@@ -158,7 +155,7 @@ services:
     image: containrrr/watchtower
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    command:  --include-restarting
+    command: --include-restarting
     environment:
       - WATCHTOWER_CLEANUP=true
       - WATCHTOWER_SCHEDULE=0 */30 * * * * # Run every half an hour

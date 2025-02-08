@@ -96,6 +96,12 @@ curl http://localhost:8095/health
 mongosh -u admin -p --authenticationDatabase admin
 ```
 
+### Curl command to create a short URL
+
+```bash
+curl -v -H "Content-Type: application/json" -H "Authorization: Basic $(echo -n username:password | base64)" -d '{"URL": "https://example.com/1", "userId": 1}' https://urlly.app/urls
+```
+
 ### Building for Production
 
 To build a production binary:
