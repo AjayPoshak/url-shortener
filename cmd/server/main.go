@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/AjayPoshak/url-shortener/config"
 	"github.com/AjayPoshak/url-shortener/internal/handlers"
 	"github.com/hibiken/asynq"
 	"github.com/redis/go-redis/v9"
@@ -17,29 +18,25 @@ import (
 )
 
 func main() {
-	env := os.Getenv("GO_ENV")
-	if env == "" {
-		log.Fatal().Msg("GO_ENV is not set")
+	config := config.NewConfig()
+	config.SetEnv(os.Getenv("GO_ENV"))
+	config.SetMongoURI(os.Getenv("MONGODB_URI"))
+	config.SetDatabaseName(os.Getenv("MONGODB_DATABASE"))
+	config.SetRedisURI(os.Getenv("REDIS_URI"))
+	if err := config.Validate(); err != nil {
+		log.Fatal().Msgf("Failed to validate config: %v", err)
 	}
-	if env == "production" {
+	if config.GetEnv() == "production" {
 
 		zerolog.SetGlobalLevel(zerolog.WarnLevel)
 	} else {
 
 		zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	}
-	mongoURI := os.Getenv("MONGODB_URI")
-	if mongoURI == "" {
-		log.Fatal().Msg("MONGO_URI is not set")
-	}
-	databaseName := os.Getenv("MONGODB_DATABASE")
-	if databaseName == "" {
-		log.Fatal().Msg("MONGODB_DATABASE is not set")
-	}
-	redisURI := os.Getenv("REDIS_URI")
-	if redisURI == "" {
-		log.Fatal().Msg("REDIS_URI is not set")
-	}
+	mongoURI := config.GetMongoURI()
+	databaseName := config.GetDatabaseName()
+	redisURI := config.GetRedisURI()
+
 	redis := redis.NewClient(&redis.Options{
 		Addr:     redisURI,
 		Password: "",
