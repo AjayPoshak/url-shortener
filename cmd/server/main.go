@@ -96,7 +96,7 @@ func main() {
 	}
 
 	// Start the server
-	log.Info().Msgf("Starting server on ", port)
+	log.Info().Msgf("Starting server on %v", port)
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatal().Msgf("Server failed to start: %v", err)
 	}

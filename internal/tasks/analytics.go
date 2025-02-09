@@ -58,6 +58,6 @@ func HandleAnalyticsDeliveryTask(ctx context.Context, t *asynq.Task, db *mongo.C
 	if err != nil {
 		log.Error().Msgf("Error inserting redirection analytics data %v", err)
 	}
-  log.Info().Msg("Successfully recorded redireciton analytics data")
+	log.Info().Msg("Successfully recorded redireciton analytics data")
 	return nil
 }
