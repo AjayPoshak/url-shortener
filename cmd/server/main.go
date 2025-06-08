@@ -84,7 +84,8 @@ func main() {
 	router.HandleFunc("GET /urls", handlers.GetUrls)
 	router.HandleFunc("POST /urls", handlers.CreateUrl)
 	router.HandleFunc("GET /health", handlers.HealthHandler)
-	router.HandleFunc("GET, HEAD /{shortCode}", handlers.Redirect)
+	router.HandleFunc("GET /{shortCode}", handlers.Redirect)
+	router.HandleFunc("HEAD /{shortCode}", handlers.Redirect)
 
 	port := ":8095"
 	// Create a new server
