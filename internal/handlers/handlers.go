@@ -161,7 +161,6 @@ var MAX_QUEUE_RETRY = 10
 var QUEUE_TIMEOUT = 5 * time.Minute
 
 func (handler *Handlers) Redirect(response http.ResponseWriter, request *http.Request) {
-	fmt.Println(request.Header.Get("User-Agent"))
 	shortCode := request.PathValue("shortCode")
 	redirectionAnalytics := tasks.AnalyticsPayload{
 		ShortCode: shortCode,
@@ -169,8 +168,6 @@ func (handler *Handlers) Redirect(response http.ResponseWriter, request *http.Re
 		Referer:   "",
 		Timestamp: time.Now(),
 	}
-	fmt.Println("here ", redirectionAnalytics)
-	fmt.Printf("abcd %+v", &redirectionAnalytics)
 	cachedValue, redisErr := handler.redis.Get(context.Background(), shortCode).Result()
 	if redisErr != nil {
 		log.Error().Msgf("Error in Redis fetching short URL %v", redisErr)
@@ -180,7 +177,10 @@ func (handler *Handlers) Redirect(response http.ResponseWriter, request *http.Re
 		if err != nil {
 			log.Error().Msgf("Could not enqueue task: %v", err)
 		}
-		handler.queue.Enqueue(task, asynq.MaxRetry(MAX_QUEUE_RETRY), asynq.Timeout(QUEUE_TIMEOUT))
+		// If the request is a GET request, enqueue the task, HEAD requests should not enqueue tasks because they are for returning header to monitoring services
+		if request.Method == http.MethodGet {
+			handler.queue.Enqueue(task, asynq.MaxRetry(MAX_QUEUE_RETRY), asynq.Timeout(QUEUE_TIMEOUT))
+		}
 		log.Info().Msgf("Value found in redis %v", cachedValue)
 		http.Redirect(response, request, cachedValue, http.StatusFound)
 		return
@@ -204,7 +204,10 @@ func (handler *Handlers) Redirect(response http.ResponseWriter, request *http.Re
 	if err != nil {
 		log.Error().Msgf("Could not enqueue task: %v", err)
 	}
-	handler.queue.Enqueue(task, asynq.MaxRetry(MAX_QUEUE_RETRY), asynq.Timeout(QUEUE_TIMEOUT))
+
+	if request.Method == http.MethodGet {
+		handler.queue.Enqueue(task, asynq.MaxRetry(MAX_QUEUE_RETRY), asynq.Timeout(QUEUE_TIMEOUT))
+	}
 
 	err = handler.redis.Set(context.Background(), shortCode, result.OriginalUrl, 0).Err()
 	if err != nil {
